@@ -118,6 +118,10 @@ my $y = unknown;
 my $ans = Solve(Equals(3, Add(3, Add(Power($x, 2), 5))), $x);
 #print Dump $ans;
 
+{
+  local $Grapefruit::hold = 1;
+  print "> ", stringify(Solve(Equals(3, Add(3, Add(Power($x, 2), 5))), $x)), "\n\n";
+}
 print "< ", stringify($ans), "\n\n";
 
 #print "< ", stringify( ContainsExpression( Add( 4, 5 ), Add( 4, 5 ) ) ), "\n\n";

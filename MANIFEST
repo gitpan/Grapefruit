@@ -1,7 +1,11 @@
 Changes
 Grapefruit.pm
-grapefruit.pl
-Makefile.PL
+Grapefruit/Compound.pm
+Grapefruit/Pattern.pm
+Grapefruit/Rule.pm
+Grapefruit/Unknown.pm
 MANIFEST
+Makefile.PL
 README
+grapefruit.pl
 test.pl

@@ -9,7 +9,7 @@ use warnings;
 sub D_PATTERN () { 0 }
 sub D_RULES () { 0 }
 sub D_EQUIV () { 0 }
-sub D_TRACE () { 0 }
+sub D_TRACE () { 1 }
 
 # Preamble
 
@@ -23,109 +23,21 @@ our @EXPORT = qw( declare rule unknown stringify
 		);
 for (0..9) { push @EXPORT, "_$_" } # all the shortened capture sequences
 
-our $VERSION = '0.00103'; # increment _after_ each distribution
+our $VERSION = '0.00104'; # increment _after_ each distribution
 
 use Carp;
 use YAML;
 use Scalar::Util qw( blessed );
 
+# Submodules
+use Grapefruit::Compound;
+use Grapefruit::Rule;
+use Grapefruit::Unknown;
+use Grapefruit::Pattern;
+
 # Code below
 
 our @captures;
-
-{ # quick'n'dirty wrapper
-  package Grapefruit::Rule;
-  sub new {
-    my $proto = shift;
-    my $class = ref $proto || $proto;
-    my $self = [@_];
-    return bless $self, $class;
-  }
-  sub match {
-    my $self = shift;
-    return $self->[0]->(@_);
-  }
-  sub transform {
-    my $self = shift;
-    return $self->[1]->(@_);
-  }
-}
-
-{ # quick'n'dirty wrapper
-  package Grapefruit::Compound;
-  use Carp;
-  sub new {
-    my $proto = shift;
-    my $class = ref $proto || $proto;
-    my ($func, @args) = @_;
-    croak "Function name needs to be a simple scalar" if ref $func;
-    my $self = [$func, @args];
-    return bless $self, $class;
-  }
-  # this is a method, but it calls the multimethod...
-  sub stringify {
-    my $self = shift;
-    #print "$self->[0] ".join(" ", @$self[1..$#$self])."\n";
-    "$self->[0]( ".join(", ", map Grapefruit::stringify($_), @$self[1..$#$self])." )";
-  }
-  sub _do_match {
-    my ($self, $parsetree) = @_;
-    if (UNIVERSAL::isa($parsetree, 'Grapefruit::Compound')) {
-      return Grapefruit::_do_match_apply($self, $parsetree);
-    } else {
-      return 0;
-    }
-  }
-  sub equiv {
-    my ($self, $right) = @_;
-    if (UNIVERSAL::isa($right, 'Grapefruit::Compound')) {
-      return 0 unless $self->[0] eq $right->[0];
-      return 0 unless @$self == @$right;
-      for (1..$#$self) {
-	return 0 unless Grapefruit::equiv($self->[$_], $right->[$_]);
-      }
-      return 1;
-    } else {
-      return 0;
-    }
-  }
-}
-
-{ # quick'n'dirty wrapper
-  package Grapefruit::Pattern;
-  BEGIN { *D_PATTERN = *Grapefruit::D_PATTERN };
-  sub new {
-    my $proto = shift;
-    my $class = ref $proto || $proto;
-    my ($patterntree, $predicate) = @_;
-
-    my $self = sub {
-      my ($parsetree) = @_;
-      local @captures = ();
-      D_PATTERN and print "* Patterntree: $patterntree\n";
-      D_PATTERN and print "* Parsetree: $parsetree\n";
-
-      # recursivly process the two trees in parallel
-      my $success = Grapefruit::_do_match($patterntree, $parsetree);
-
-      # check the predicate
-      if (defined $predicate) {
-        $success &&= $predicate->(@captures);
-      }
-    
-      D_PATTERN and print "* Captures: @captures\n";
-      D_PATTERN and print "* Success: $success\n";
-    
-      if ($success) {
-        return wantarray ? @captures : 1;
-      } else {
-        return wantarray ? () : 0;
-      }
-    };
-
-    return bless $self, $class;
-  }
-}
 
 sub capture ($;$) {
   my ($num, $matcher) = @_;
@@ -218,6 +130,7 @@ sub rule ($$$) {
 }
 
 our $hold;
+our $indent=-1; # magic which works!
 sub run_rules ($;$) {
   my ($expr, $prec) = @_;
 
@@ -238,11 +151,12 @@ sub run_rules ($;$) {
 	D_RULES and print "Pre-transform:\n", Dump($expr);
 	D_RULES and print "Captures: @captures\n";
 
-	D_TRACE and print ": ", stringify($expr), "\n";
+	local $indent = $indent + 1;
+	D_TRACE and print '  'x$indent, ": ", stringify($expr), "\n";
 
 	$expr = $rule->transform(@captures);
 
-	D_TRACE and print "  --> ", stringify($expr), "\n";
+	D_TRACE and print '  'x$indent, "--> ", stringify($expr), "\n";
 
 	D_RULES and print "Post-transform:\n", Dump($expr);
 
@@ -286,14 +200,14 @@ sub stringify {
   } @_;
 }
 
-sub unknown () { bless [undef], 'symbolic::unknown' }
+sub unknown () { Grapefruit::Unknown->new }
 
 sub is_num ($) {
   return $_[0] =~ /^\d+$/; # only handles integers, see perlfaq for more REs
 }
 
 sub is_atom ($) {
-  return 1 if UNIVERSAL::isa($_[0], 'symbolic::unknown');
+  return 1 if UNIVERSAL::isa($_[0], 'Grapefruit::Unknown');
   return ref $_[0] ? 0 : 1;
 }
 
