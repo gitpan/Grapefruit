@@ -14,9 +14,15 @@ package Grapefruit::Pattern;
 # Preamble
 
 # we might need a version here
-our $VERSION = '0.00104';
+our $VERSION = '0.00105';
 
 use Carp;
+
+# eek! note that the inherited constructed *isn't* called. ouch!
+use base qw(Grapefruit::Atom);
+
+use overload
+  '&{}' => "operator_coderef";
 
 # Code below
 
@@ -25,7 +31,23 @@ sub new {
   my $class = ref $proto || $proto;
   my ($patterntree, $predicate) = @_;
 
-  my $self = sub {
+  my $self = { patterntree => $patterntree,
+               predicate => $predicate,
+	     };
+
+  return bless $self, $class;
+}
+
+sub stringify {
+  my $self = shift;
+  "pattern( " . Grapefruit::stringify($self->{patterntree}) . ", " .
+    Grapefruit::stringify($self->{predicate}) . " )";
+}
+
+sub operator_coderef {
+  my $self = shift;
+  my ($patterntree, $predicate) = @$self{qw(patterntree predicate)};
+  return sub {
     my ($parsetree) = @_;
     local @captures = ();
     D_PATTERN and print "* Patterntree: $patterntree\n";
@@ -48,8 +70,6 @@ sub new {
       return wantarray ? () : 0;
     }
   };
-
-  return bless $self, $class;
 }
 
 1;

@@ -10,9 +10,11 @@ use Grapefruit;
 # Preamble
 
 # we might need a version here
-our $VERSION = '0.00104';
+our $VERSION = '0.00105';
 
 use Carp;
+
+use base qw(Grapefruit::Atom);
 
 # Code below
 
@@ -28,6 +30,15 @@ sub new {
 sub stringify {
   my $self = shift;
   "{$$self}";
+}
+
+sub equiv {
+  my ($self, $right) = @_;
+  if (UNIVERSAL::isa($right, 'Grapefruit::Unknown')) {
+    return $$self == $$right; # do the ids match?
+  } else {
+    return 0;
+  }
 }
 
 1;

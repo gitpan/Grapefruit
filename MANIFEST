@@ -1,5 +1,7 @@
 Changes
 Grapefruit.pm
+Grapefruit/Atom.pm
+Grapefruit/Capture.pm
 Grapefruit/Compound.pm
 Grapefruit/Pattern.pm
 Grapefruit/Rule.pm

@@ -27,7 +27,7 @@ sub test {
   }
 }
 
-for (qw(Solve Equals Add Power SuchThat Sub ContainsExpression Div Mult Ln)) {
+for (qw(Solve SuchThat ContainsExpression Ln)) {
   declare $_;
 }
 
@@ -37,28 +37,9 @@ print "Defining rules\n";
 {
   local $Grapefruit::hold = 1;
 
-  if (0) {
-
-# prototype rules for addition
-  rule 30, pattern( Add( _0, _1(\&is_num) ) ),
-    sub { Add( $_[1], $_[0] ) };
-  rule 20, pattern( Add( _0(\&is_num), _1(\&is_num) ) ),
-    sub { $_[0] + $_[1] };
-  rule 10, pattern( Add( _0(\&is_num), Add( _1(\&is_num), _2 ) ) ),
-    sub { Add( $_[0] + $_[1], $_[2] ) };
-
-  } else {
-
-  # precedence 0 has builtins like adding two numbers
-  rule 0, pattern( Add( _0(\&is_num), _1(\&is_num) ) ),
-    sub { $_[0] + $_[1] };
-
-  rule 0, pattern( Sub( _0(\&is_num), _1(\&is_num) ) ),
-    sub { $_[0] - $_[1] };
-
   ## rules for Solve & SuchThat & ContainsExpression
-  rule 100, pattern( Solve( Equals( _0, _1 ), _2 ) ),
-    sub { SuchThat(Sub($_[0], $_[1]), 0, $_[2]) };
+  rule 100, pattern( Solve( (_0() == _1()), _2 ) ),
+    sub { SuchThat($_[0] - $_[1], 0, $_[2]) };
 
   # ContainsExpression(a, b) : is b contained within a?
   rule 10, pattern( ContainsExpression( _0, _1 ), sub { equiv($_[0], $_[1]) } ),
@@ -70,7 +51,7 @@ print "Defining rules\n";
       my ($x, $y) = @_;
       die "Unexpected type of \$x: $x" unless UNIVERSAL::isa($x, 'Grapefruit::Compound');
       for (@$x[1..$#$x]) {
-	return True if test( ContainsExpression( $_, $y ) );
+        return True if test( ContainsExpression( $_, $y ) );
       }
       return False;
     };
@@ -86,28 +67,27 @@ print "Defining rules\n";
   rule 20, pattern( SuchThat( _0(\&is_atom), _1, _2 ) ),
     sub { $_[2] };
 
-  rule 30, pattern( SuchThat( Add(_0,_1), _2, _3 ),
+  rule 30, pattern( SuchThat( _0() + _1(), _2, _3 ),
                     sub { test( ContainsExpression( $_[0], $_[3] ) ) } ),
-    sub { SuchThat( $_[0], Sub( $_[2], $_[1] ), $_[3] ) };
-  rule 30, pattern( SuchThat( Add(_1,_0), _2, _3 ),
+    sub { SuchThat( $_[0], $_[2] - $_[1], $_[3] ) };
+  rule 30, pattern( SuchThat( _1() + _0(), _2, _3 ),
                     sub { test( ContainsExpression( $_[0], $_[3] ) ) } ),
-    sub { SuchThat( $_[0], Sub( $_[2], $_[1] ), $_[3] ) };
+    sub { SuchThat( $_[0], $_[2] - $_[1], $_[3] ) };
 
-  rule 30, pattern( SuchThat( Sub(_0,_1), _2, _3 ),
+  rule 30, pattern( SuchThat( _0() - _1(), _2, _3 ),
                     sub { test( ContainsExpression( $_[0], $_[3] ) ) } ),
-    sub { SuchThat( $_[0], Add( $_[2], $_[1] ), $_[3] ) };
-  rule 30, pattern( SuchThat( Sub(_1,_0), _2, _3 ),
+    sub { SuchThat( $_[0], $_[2] + $_[1], $_[3] ) };
+  rule 30, pattern( SuchThat( _1() - _0(), _2, _3 ),
                     sub { test( ContainsExpression( $_[0], $_[3] ) ) } ),
-    sub { SuchThat( $_[0], Sub( $_[1], $_[2] ), $_[3] ) };
+    sub { SuchThat( $_[0], $_[1] - $_[2], $_[3] ) };
 
-  rule 30, pattern( SuchThat( Power(_0,_1), _2, _3),
+  rule 30, pattern( SuchThat( _0() ** _1(), _2, _3),
                     sub { test( ContainsExpression( $_[0], $_[3] ) ) } ),
-    sub { SuchThat( $_[0], Power( $_[2], Div( 1, $_[1] ) ), $_[3] ) };
-  rule 30, pattern( SuchThat( Power(_0,_1), _2, _3),
+    sub { SuchThat( $_[0], $_[2] ** ( 1 / $_[1] ), $_[3] ) };
+  rule 30, pattern( SuchThat( _0() ** _1(), _2, _3),
                     sub { test( ContainsExpression( $_[1], $_[3] ) ) } ),
-    sub { SuchThat( $_[1], Div( Ln($_[2]), Ln($_[0]) ), $_[3] ) };
+    sub { SuchThat( $_[1], Ln($_[2]) / Ln($_[0]), $_[3] ) };
   
-  }
 }
 
 print "Solving a problem\n";
@@ -115,12 +95,27 @@ print "Solving a problem\n";
 my $x = unknown;
 my $y = unknown;
 
-my $ans = Solve(Equals(3, Add(3, Add(Power($x, 2), 5))), $x);
+sub f {
+#  Solve(3 == (3 + ($x**2 + 5)), $x);
+  Solve(3 == (3 + ($x**2 - 5)), $x);
+}
+
+#my $ans = Solve(3 == (3 + ($x**2 + 5)), $x);
+my $ans = f();
 #print Dump $ans;
+print "\n";
 
 {
   local $Grapefruit::hold = 1;
-  print "> ", stringify(Solve(Equals(3, Add(3, Add(Power($x, 2), 5))), $x)), "\n\n";
+#  print "> ", stringify(Solve(3 == (3 + ($x**2 + 5)), $x)), "\n\n";
+  print "> ", stringify( f() ), "\n\n";
+#  print "> ", stringify(Solve(3, $x)), "\n\n";
+#  print "> ", stringify($x**2), "\n\n";
+#  print "> ", stringify(2**$x), "\n\n";
+#  print "> ", stringify($x**2 + 5), "\n\n";
+#  print "> ", stringify(3 + ($x**2 + 5)), "\n\n";
+#  print "> ", stringify(3 == (3 + ($x**2 + 5))), "\n\n"; # this blows up
+#  print "> ", stringify((3 + ($x**2 + 5)) == 3), "\n\n"; # this blows up
 }
 print "< ", stringify($ans), "\n\n";
 
@@ -141,6 +136,11 @@ grapefruit.pl - A simple demonstration (and test) of Grapefruit
 =head1 SYNOPSIS
 
   ./grapefruit.pl
+
+=head1 DESCRIPTION
+
+This will eventually be a front-end interface to the case, but for the moment
+see the pod for L<Grapefruit> for more information.
 
 =head1 AUTHOR
 

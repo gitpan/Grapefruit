@@ -5,14 +5,17 @@ use strict;
 use warnings;
 
 # import any needed constants from Grapefruit
-use Grapefruit;
+use Grapefruit;;
 
 # Preamble
 
 # we might need a version here
-our $VERSION = '0.00104';
+our $VERSION = '0.00105';
 
 use Carp;
+
+# we all know that compounds ARE NOT atoms
+use base qw(Grapefruit::Atom);
 
 # Code below
 
