@@ -4,6 +4,11 @@ use 5.006;
 use strict;
 use warnings;
 
+# Constants
+
+sub D_PATTERN () { 0 }
+sub D_RULES () { 0 }
+
 # Preamble
 
 require Exporter;
@@ -11,15 +16,16 @@ require Exporter;
 our @ISA = qw(Exporter);
 
 our @EXPORT = qw( declare rule unknown stringify
-                  capture is_num run_rules pattern
+                  capture is_num pattern
 		  $hold
 		);
 for (0..9) { push @EXPORT, "_$_" } # all the shortened capture sequences
 
-our $VERSION = '0.00101';
+our $VERSION = '0.00102'; # increment _after_ each distribution
 
 use Carp;
 use YAML;
+use Scalar::Util qw( blessed );
 
 # Code below
 
@@ -38,6 +44,36 @@ use YAML;
   sub transform {
     my $self = shift;
     return $self->[1]->(@_);
+  }
+}
+
+{ # quick'n'dirty wrapper
+  package Grapefruit::Compound;
+  use Carp;
+  sub new {
+    my $proto = shift;
+    my $class = ref $proto || $proto;
+    my ($func, @args) = @_;
+    croak "Function name needs to be a simple scalar" if ref $func;
+    my $self = [$func, @args];
+    return bless $self, $class
+  }
+  # this is a method, but it calls the multimethod...
+  sub stringify {
+    my $self = shift;
+    #print "$self->[0] ".join(" ", @$self[1..$#$self])."\n";
+    "$self->[0]( ".join(", ", map Grapefruit::stringify($_), @$self[1..$#$self])." )";
+  }
+}
+
+{ # quick'n'dirty wrapper
+  package Grapefruit::Pattern;
+  sub new {
+    my $proto = shift;
+    my $class = ref $proto || $proto;
+    my ($patterntree) = @_;
+    my $self = sub {};
+    return bless $self, $class;
   }
 }
 
@@ -77,14 +113,14 @@ sub _9 (;$) { &capture(9, @_) }
 
 sub _do_match_apply {
   my ($patterntree, $parsetree) = @_;
-  print "*** _do_match_apply [@$patterntree] [@$parsetree]\n";
+  D_PATTERN and print "*** _do_match_apply [@$patterntree] [@$parsetree]\n";
   if ($patterntree->[0] eq $parsetree->[0] and
       @$patterntree == @$parsetree) {
     for (1..$#$patterntree) {
       _do_match($patterntree->[$_], $parsetree->[$_]) or
         return 0;
     }
-    print "**** successful\n";
+    D_PATTERN and print "**** successful\n";
     return 1;
   } else {
     return 0;
@@ -93,13 +129,13 @@ sub _do_match_apply {
 
 sub _do_match {
   my ($patterntree, $parsetree) = @_;
-  print "** _do_match $patterntree $parsetree\n";
+  D_PATTERN and print "** _do_match $patterntree $parsetree\n";
   if (ref $patterntree eq "ARRAY" and
       ref $parsetree eq "ARRAY") {
     return _do_match_apply($patterntree, $parsetree);
   } elsif (ref $patterntree eq "pattern::capture") {
     # probably just handle all code refs like this
-    print "*** calling the pattern::capture closure with $parsetree\n";
+    D_PATTERN and print "*** calling the pattern::capture closure with $parsetree\n";
     return $patterntree->($parsetree);
   } elsif (not ref $patterntree or
            not ref $parsetree) {
@@ -109,7 +145,7 @@ sub _do_match {
       return $patterntree eq $parsetree;
     }
   } else {
-    print "*** not sure how to handle this\n";
+    D_PATTERN and print "*** not sure how to handle this\n";
     carp "Not sure how to handle this, sort it out yourself";
     return 0;
   }
@@ -122,14 +158,14 @@ sub pattern ($) {
   my $closure = sub {
     my ($parsetree) = @_;
     local @captures = ();
-    print "* Patterntree: $patterntree\n";
-    print "* Parsetree: $parsetree\n";
+    D_PATTERN and print "* Patterntree: $patterntree\n";
+    D_PATTERN and print "* Parsetree: $parsetree\n";
 
     # recursivly process the two trees in parallel
     my $success = _do_match($patterntree, $parsetree);
     
-    print "* Captures: @captures\n";
-    print "* Success: $success\n";
+    D_PATTERN and print "* Captures: @captures\n";
+    D_PATTERN and print "* Success: $success\n";
     
     if ($success) {
       return wantarray ? @captures : 1;
@@ -157,19 +193,19 @@ sub run_rules ($;$) {
 
   my @levels = sort keys %rules;
   @levels = grep { $_ <= $prec } @levels if defined $prec;
-  print "levels: @levels\n";
+  D_RULES and print "levels: @levels\n";
 
   LEVEL: for my $level (@levels) {
-    print "level: $level\n";
+    D_RULES and print "level: $level\n";
     RULE: for my $rule (@{$rules{$level}}) {
-      print "  rule: $rule\n";
+      D_RULES and print "  rule: $rule\n";
       if (my @captures = $rule->match($expr)) {
 	local $hold = 1;
-	print "    match!\n";
-	print "Pre-transform:\n", Dump($expr);
-	print "Captures: @captures\n";
+	D_RULES and print "    match!\n";
+	D_RULES and print "Pre-transform:\n", Dump($expr);
+	D_RULES and print "Captures: @captures\n";
 	$expr = $rule->transform(@captures);
-	print "Post-transform:\n", Dump($expr);
+	D_RULES and print "Post-transform:\n", Dump($expr);
 	# now what do we skip to the next precedence level or restart this one?
 	# last LEVEL; # terminate early
 	# next LEVEL; # skip to the next one
@@ -190,16 +226,19 @@ sub declare ($) {
   my $code = <<"END";
     package $pkg;
     sub $name {
-      run_rules [q{$name}, \@_];
+      Grapefruit::run_rules Grapefruit::Compound->new(q{$name}, \@_);
     }
 END
   eval $code;
   croak "Error declaring subroutine: $@" if $@;
 }
 
+# this is a multimethod manually implemented
 sub stringify {
   return join ", ", map {
-    if (ref $_ eq "ARRAY") { # this is a function application atm
+    if (blessed $_ and $_->can('stringify')) {
+      $_->stringify;
+    } elsif (ref $_ eq "ARRAY") { # this is a function application atm
       "($$_[0] ".join(" ", map stringify($_), @$_[1..$#$_]).")";
     } else {
       "'$_'"
